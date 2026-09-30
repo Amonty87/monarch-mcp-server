@@ -1,7 +1,6 @@
 """Transaction management tools."""
 
 import asyncio
-import json
 import logging
 import re
 import unicodedata
@@ -558,15 +557,7 @@ async def get_transactions(
             )
         )
     except Exception as e:
-        return json.dumps(
-            {
-                "error": True,
-                "tool": "get_transactions",
-                "message": format_exception(e),
-            },
-            indent=2,
-            default=str,
-        )
+        return json_error("get_transactions", e)
 
 
 @mcp.tool()

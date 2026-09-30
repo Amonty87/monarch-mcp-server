@@ -10,6 +10,7 @@ except ImportError:  # mcp < 2.0
 
 from monarch_mcp_server import auth
 from monarch_mcp_server.app import mcp
+from monarch_mcp_server.helpers import ToolErrorText
 from monarch_mcp_server.secure_session import secure_session
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ async def check_auth_status() -> str:
 
         return status
     except Exception as e:
-        return f"Error checking auth status: {str(e)}"
+        return ToolErrorText(f"Error checking auth status: {str(e)}")
 
 
 @mcp.tool()
@@ -119,4 +120,4 @@ async def debug_session_loading() -> str:
         )
     except Exception as e:
         logger.exception("Keyring access failed")
-        return f"❌ Keyring access failed: {type(e).__name__}: {e}"
+        return ToolErrorText(f"❌ Keyring access failed: {type(e).__name__}: {e}")

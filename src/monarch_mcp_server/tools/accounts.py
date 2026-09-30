@@ -12,6 +12,7 @@ from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
 from monarch_mcp_server.helpers import (
     json_error,
+    json_failure,
     json_rejected,
     json_success,
     payload_errors,
@@ -371,7 +372,7 @@ async def upload_account_balance_history(
         }
 
         if not date_to_balance:
-            return json_success({
+            return json_failure("upload_account_balance_history", {
                 "updated": False,
                 "message": "No corrections provided",
             })
@@ -402,7 +403,7 @@ async def upload_account_balance_history(
             ))
 
         if not applied:
-            return json_success({
+            return json_failure("upload_account_balance_history", {
                 "updated": False,
                 "message": "No matching dates found in history",
                 "unmatched_dates": unmatched,

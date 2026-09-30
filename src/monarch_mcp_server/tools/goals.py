@@ -13,6 +13,7 @@ from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
 from monarch_mcp_server.helpers import (
     json_error,
+    json_failure,
     json_rejected,
     json_success,
     payload_errors,
@@ -212,7 +213,7 @@ async def update_savings_goal(
             changes["isSinkingFund"] = is_sinking_fund
 
         if not changes:
-            return json_success({
+            return json_failure("update_savings_goal", {
                 "success": False,
                 "message": "Nothing to update -- pass at least one field.",
             })

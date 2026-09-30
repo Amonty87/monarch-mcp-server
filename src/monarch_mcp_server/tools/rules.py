@@ -9,6 +9,7 @@ from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
 from monarch_mcp_server.helpers import (
     json_error,
+    json_failure,
     json_rejected,
     json_success,
     payload_errors,
@@ -490,7 +491,7 @@ async def create_transaction_rule(
         )
 
         if not (merchant or statement or amount or account_ids or category_ids):
-            return json_success({
+            return json_failure("create_transaction_rule", {
                 "success": False,
                 "message": (
                     "A rule needs at least one matching criterion: merchant, "
@@ -535,7 +536,7 @@ async def create_transaction_rule(
         payload = result.get("createTransactionRuleV2") or {}
         errors = _meaningful_errors(payload.get("errors"))
         if errors:
-            return json_success({"success": False, "errors": errors})
+            return json_rejected("create_transaction_rule", errors)
 
         rule = payload.get("transactionRule") or {}
         return json_success({
@@ -648,7 +649,7 @@ async def update_transaction_rule(
 
         existing = await _fetch_rule(client, rule_id)
         if existing is None:
-            return json_success({
+            return json_failure("update_transaction_rule", {
                 "success": False,
                 "message": f"No transaction rule found with id {rule_id}",
             })
@@ -692,7 +693,7 @@ async def update_transaction_rule(
             }
 
         if not (merchant or statement or amount):
-            return json_success({
+            return json_failure("update_transaction_rule", {
                 "success": False,
                 "message": (
                     "This rule has no merchant, statement or amount criteria to "
@@ -826,7 +827,7 @@ async def update_transaction_rule(
         payload = result.get("updateTransactionRuleV2") or {}
         errors = _meaningful_errors(payload.get("errors"))
         if errors:
-            return json_success({"success": False, "errors": errors})
+            return json_rejected("update_transaction_rule", errors)
 
         return json_success({
             "success": True,
@@ -871,7 +872,7 @@ async def delete_transaction_rule(rule_id: str) -> str:
 
         errors = delete_result.get("errors")
         if errors:
-            return json_success({"success": False, "errors": errors})
+            return json_rejected("delete_transaction_rule", errors)
 
         return json_success({"success": True, "message": "Rule deleted successfully"})
     except Exception as e:
@@ -920,7 +921,7 @@ async def reorder_transaction_rule(rule_id: str, new_order: int) -> str:
     """
     try:
         if new_order < 0:
-            return json_success({
+            return json_failure("reorder_transaction_rule", {
                 "success": False, "message": "new_order must be 0 or greater",
             })
         client = await get_monarch_client()
@@ -936,7 +937,7 @@ async def reorder_transaction_rule(rule_id: str, new_order: int) -> str:
             None,
         )
         if existing is None:
-            return json_success({
+            return json_failure("reorder_transaction_rule", {
                 "success": False,
                 "message": f"No transaction rule found with id {rule_id}",
             })

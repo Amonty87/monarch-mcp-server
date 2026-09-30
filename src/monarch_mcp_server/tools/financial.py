@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
-from monarch_mcp_server.helpers import json_success, json_error
+from monarch_mcp_server.helpers import json_error, json_failure, json_success
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ async def get_net_worth_by_account_type(
     """
     try:
         if timeframe not in ("month", "year"):
-            return json_success({
+            return json_failure("get_net_worth_by_account_type", {
                 "success": False,
                 "error": "timeframe must be 'month' or 'year'"
             })

@@ -10,7 +10,7 @@ from monarchmoney import MonarchMoney
 
 from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
-from monarch_mcp_server.helpers import json_success, json_error
+from monarch_mcp_server.helpers import json_error, json_failure, json_success
 
 logger = logging.getLogger(__name__)
 
@@ -176,13 +176,13 @@ async def set_budget_amount(
     """
     try:
         if category_id and category_group_id:
-            return json_success({
+            return json_failure("set_budget_amount", {
                 "success": False,
                 "error": "Cannot specify both category_id and category_group_id. Choose one."
             })
 
         if not category_id and not category_group_id:
-            return json_success({
+            return json_failure("set_budget_amount", {
                 "success": False,
                 "error": "Must specify either category_id or category_group_id."
             })

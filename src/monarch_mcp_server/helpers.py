@@ -168,6 +168,21 @@ def json_rejected(tool_name: str, errors: Dict[str, Any]) -> str:
     )
 
 
+def json_failure(tool_name: str, data: Dict[str, Any]) -> str:
+    """Serialize a failure the tool decided on itself as an explicit failure.
+
+    For refusals that never reach Monarch or find nothing to act on: invalid
+    arguments, an id that does not exist, nothing to update. *data* is returned
+    as the body unchanged; the ``ToolErrorText`` type is what makes the MCP
+    layer report the call with ``isError: true``.
+    """
+    logger.info(
+        f"{tool_name} returned a failure: "
+        f"{data.get('message') or data.get('error')}"
+    )
+    return ToolErrorText(json.dumps(data, indent=2, default=str))
+
+
 def json_success(data: Any) -> str:
     """Serialize *data* to a JSON string for tool responses."""
     return json.dumps(data, indent=2, default=str)

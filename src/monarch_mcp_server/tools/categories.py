@@ -10,6 +10,7 @@ from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
 from monarch_mcp_server.helpers import (
     json_error,
+    json_failure,
     json_rejected,
     json_success,
     payload_errors,
@@ -303,7 +304,8 @@ async def update_category(
             budget_variability is not None
             and budget_variability not in _VALID_BUDGET_VARIABILITY
         ):
-            return json_success(
+            return json_failure(
+                "update_category",
                 {
                     "success": False,
                     "message": (
@@ -325,7 +327,8 @@ async def update_category(
         # here would contradict this very message, which offers dry_run as
         # the way to preview the change.
         if resets_rollover and not confirm_rollover_reset and not dry_run:
-            return json_success(
+            return json_failure(
+                "update_category",
                 {
                     "success": False,
                     "message": (
@@ -343,7 +346,8 @@ async def update_category(
             rollover_frequency is not None
             and rollover_frequency not in _VALID_ROLLOVER_FREQUENCY
         ):
-            return json_success(
+            return json_failure(
+                "update_category",
                 {
                     "success": False,
                     "message": (
@@ -380,7 +384,8 @@ async def update_category(
             provided["rolloverType"] = rollover_type
 
         if not provided:
-            return json_success(
+            return json_failure(
+                "update_category",
                 {
                     "success": False,
                     "message": "At least one field to update must be provided.",
@@ -400,7 +405,8 @@ async def update_category(
             )
             cat = current.get("category")
             if not cat:
-                return json_success(
+                return json_failure(
+                    "update_category",
                     {
                         "success": False,
                         "message": "No category found with the given ID.",
@@ -431,7 +437,7 @@ async def update_category(
 
         errors = result.get("updateCategory", {}).get("errors")
         if errors:
-            return json_success({"success": False, "errors": errors})
+            return json_rejected("update_category", errors)
 
         cat = result.get("updateCategory", {}).get("category", {})
         group = cat.get("group") or {}
@@ -516,7 +522,8 @@ async def get_category_details(
 
         cat = result.get("category")
         if not cat:
-            return json_success(
+            return json_failure(
+                "get_category_details",
                 {
                     "category": None,
                     "message": "No category found with the given ID.",
