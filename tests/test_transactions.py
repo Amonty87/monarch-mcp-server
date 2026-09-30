@@ -240,6 +240,96 @@ class TestUpdateTransactionNotes:
         assert "API error" in data["message"]
 
 
+class TestClearingNotesRestoresNull:
+    """Clearing a note must put Monarch's null back, not an empty string.
+
+    Upstream update_transaction only sends notes when it is not None, so a
+    clear through it stores "" verbatim. Monarch's hasNotes filter treats ""
+    as no note, but it is not the value an untouched transaction has, so a
+    clear-then-read round trip never matches the original. Monarch accepts an
+    explicit ``notes: null`` in UpdateTransactionMutationInput.
+    """
+
+    CLEARED = {
+        "updateTransaction": {
+            "transaction": {"id": "txn-1", "notes": None},
+            "errors": None,
+        }
+    }
+
+    async def test_empty_notes_sends_null(self, mock_monarch_client):
+        mock_monarch_client.gql_call.return_value = self.CLEARED
+
+        result = json.loads(await update_transaction_notes("txn-1", ""))
+
+        mock_monarch_client.update_transaction.assert_not_called()
+        kwargs = mock_monarch_client.gql_call.call_args.kwargs
+        assert kwargs["variables"] == {"input": {"id": "txn-1", "notes": None}}
+        assert kwargs["operation"] == "Web_TransactionDrawerUpdateTransaction"
+        assert result["updateTransaction"]["transaction"]["notes"] is None
+
+    async def test_rejected_clear_is_reported(self, mock_monarch_client):
+        mock_monarch_client.gql_call.return_value = {
+            "updateTransaction": {
+                "transaction": None,
+                "errors": {"message": "Transaction not found"},
+            }
+        }
+
+        result = json.loads(await update_transaction_notes("txn-1", ""))
+
+        assert result["success"] is False
+        assert "Transaction not found" in json.dumps(result)
+
+    async def test_receipt_url_with_empty_notes_is_not_a_clear(
+        self, mock_monarch_client
+    ):
+        await update_transaction_notes("txn-1", "", receipt_url="https://r.example/1")
+
+        mock_monarch_client.gql_call.assert_not_called()
+        sent = mock_monarch_client.update_transaction.call_args.kwargs["notes"]
+        assert sent == "[Receipt: https://r.example/1] "
+
+    async def test_update_transaction_empty_notes_sends_null(
+        self, mock_monarch_client
+    ):
+        mock_monarch_client.gql_call.return_value = self.CLEARED
+
+        result = json.loads(await update_transaction("txn-1", notes=""))
+
+        mock_monarch_client.update_transaction.assert_not_called()
+        kwargs = mock_monarch_client.gql_call.call_args.kwargs
+        assert kwargs["variables"] == {"input": {"id": "txn-1", "notes": None}}
+        assert result["updateTransaction"]["transaction"]["notes"] is None
+
+    async def test_update_transaction_clears_notes_alongside_other_fields(
+        self, mock_monarch_client
+    ):
+        mock_monarch_client.gql_call.return_value = self.CLEARED
+
+        await update_transaction("txn-1", category_id="cat-2", notes="")
+
+        mock_monarch_client.update_transaction.assert_called_once_with(
+            transaction_id="txn-1", category_id="cat-2"
+        )
+        kwargs = mock_monarch_client.gql_call.call_args.kwargs
+        assert kwargs["variables"] == {"input": {"id": "txn-1", "notes": None}}
+
+    async def test_update_transaction_stops_when_clear_is_rejected(
+        self, mock_monarch_client
+    ):
+        mock_monarch_client.gql_call.return_value = {
+            "updateTransaction": {"transaction": None, "errors": {"message": "no"}}
+        }
+
+        result = json.loads(
+            await update_transaction("txn-1", category_id="cat-2", notes="")
+        )
+
+        assert result["success"] is False
+        mock_monarch_client.update_transaction.assert_not_called()
+
+
 class TestMarkTransactionReviewed:
     """Tests for mark_transaction_reviewed tool."""
 

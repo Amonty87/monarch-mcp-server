@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 
+from gql import gql
+
 from monarch_mcp_server.app import mcp
 from monarch_mcp_server.client import get_monarch_client
 from monarch_mcp_server.helpers import (
@@ -23,6 +25,49 @@ from monarch_mcp_server.helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Upstream update_transaction only sends notes when it is not None, so clearing
+# through it stores "" verbatim instead of the null an untouched transaction
+# has. Monarch accepts an explicit null, which this mutation sends.
+CLEAR_NOTES_MUTATION = gql(
+    """
+mutation Web_TransactionDrawerUpdateTransaction($input: UpdateTransactionMutationInput!) {
+  updateTransaction(input: $input) {
+    transaction {
+      id
+      notes
+      __typename
+    }
+    errors {
+      ...PayloadErrorFields
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment PayloadErrorFields on PayloadError {
+  fieldErrors {
+    field
+    messages
+    __typename
+  }
+  message
+  code
+  __typename
+}
+"""
+)
+
+
+async def _clear_transaction_notes(client: Any, transaction_id: str) -> Any:
+    """Set a transaction's notes back to null."""
+    return await client.gql_call(
+        operation="Web_TransactionDrawerUpdateTransaction",
+        graphql_query=CLEAR_NOTES_MUTATION,
+        variables={"input": {"id": transaction_id, "notes": None}},
+    )
+
 
 KNOWN_CURRENCY_CODES = {
     "AED",
@@ -695,10 +740,21 @@ async def update_transaction(
         date: New transaction date in YYYY-MM-DD format
         hide_from_reports: Whether to hide this transaction from reports
         needs_review: Whether this transaction needs review
-        notes: Notes for the transaction
+        notes: Notes for the transaction. notes="" clears the note (stored as null).
     """
     try:
         client = await get_monarch_client()
+
+        if notes == "":
+            cleared = await _clear_transaction_notes(client, transaction_id)
+            errors = payload_errors(cleared, "updateTransaction")
+            if errors:
+                return json_rejected("update_transaction", errors)
+            notes = None
+            others = (category_id, merchant_name, goal_id, amount, date,
+                      hide_from_reports, needs_review)
+            if all(value is None for value in others):
+                return json_success(cleared)
 
         update_data: Dict[str, Any] = {"transaction_id": transaction_id}
 
@@ -764,7 +820,7 @@ async def update_transaction_notes(
 
     Args:
         transaction_id: The ID of the transaction to update
-        notes: The note/memo text to add
+        notes: The note/memo text to add. notes="" clears the note (stored as null).
         receipt_url: Optional URL to a receipt (will be formatted as [Receipt: URL])
 
     Returns:
@@ -772,6 +828,13 @@ async def update_transaction_notes(
     """
     try:
         client = await get_monarch_client()
+
+        if notes == "" and not receipt_url:
+            result = await _clear_transaction_notes(client, transaction_id)
+            errors = payload_errors(result, "updateTransaction")
+            if errors:
+                return json_rejected("update_transaction_notes", errors)
+            return json_success(result)
 
         if receipt_url:
             formatted_notes = f"[Receipt: {receipt_url}] {notes}"
