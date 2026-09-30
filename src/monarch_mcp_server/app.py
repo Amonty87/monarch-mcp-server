@@ -24,9 +24,10 @@ mcp = FastMCP("Monarch Money MCP Server")
 
 # Must run before the tool modules are imported, since it works by wrapping
 # mcp.tool() and registration happens at import time.
-from monarch_mcp_server import read_only  # noqa: E402
+from monarch_mcp_server import read_only, tool_errors  # noqa: E402
 
 read_only.install(mcp)
+tool_errors.install(mcp)
 
 # Import tools package to trigger @mcp.tool() registration
 import monarch_mcp_server.tools  # noqa: E402, F401

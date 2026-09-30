@@ -146,13 +146,25 @@ def payload_errors(
     return None
 
 
+class ToolErrorText(str):
+    """A tool's JSON failure body.
+
+    Still a plain ``str`` to anything that calls a tool function directly, but
+    the MCP layer (see ``tool_errors``) recognises it and reports the call with
+    ``isError: true``. Without that, a failed or refused call reached clients as
+    a successful one unless they parsed the body.
+    """
+
+
 def json_rejected(tool_name: str, errors: Dict[str, Any]) -> str:
     """Serialize a payload level rejection as an explicit failure."""
     logger.warning(f"{tool_name} was rejected by Monarch: {errors}")
-    return json.dumps(
-        {"success": False, "tool": tool_name, "errors": errors},
-        indent=2,
-        default=str,
+    return ToolErrorText(
+        json.dumps(
+            {"success": False, "tool": tool_name, "errors": errors},
+            indent=2,
+            default=str,
+        )
     )
 
 
@@ -164,8 +176,10 @@ def json_success(data: Any) -> str:
 def json_error(tool_name: str, exc: Exception) -> str:
     """Return a consistent JSON error string and log the failure."""
     logger.error(f"Failed in {tool_name}: {exc}")
-    return json.dumps(
-        {"error": True, "tool": tool_name, "message": format_exception(exc)},
-        indent=2,
-        default=str,
+    return ToolErrorText(
+        json.dumps(
+            {"error": True, "tool": tool_name, "message": format_exception(exc)},
+            indent=2,
+            default=str,
+        )
     )
