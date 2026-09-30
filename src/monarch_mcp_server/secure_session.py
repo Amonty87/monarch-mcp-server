@@ -151,6 +151,22 @@ def _keyring_available() -> bool:
     return stored == _PROBE_VALUE
 
 
+def _keyring_holds_session() -> bool:
+    """True when a stored session can already be read from the keyring.
+
+    A readable stored session proves the backend works for this process, so
+    startup needs no write probe. Without this check every server start (read
+    only mode included) wrote and deleted a probe item, and a probe failure
+    moved an already logged in process onto file storage.
+    """
+    try:
+        import keyring
+
+        return keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME) is not None
+    except Exception:
+        return False
+
+
 def _chunk_username(index: int, generation: Optional[int] = None) -> str:
     """Username for chunk *index*.
 
@@ -297,11 +313,14 @@ class SecureMonarchSession:
     falling back to a file-based store when no keyring backend is available."""
 
     def __init__(self) -> None:
-        self._use_keyring = _keyring_available()
+        self._use_keyring = _keyring_holds_session() or _keyring_available()
         if self._use_keyring:
             logger.info("🔐 Using system keyring for token storage")
         else:
-            logger.info("🔐 Keyring unavailable — using file-based token storage")
+            # WARNING, not INFO: a keyring that exists but cannot be used here
+            # (locked, or another account's keychain) otherwise surfaces only as
+            # "Authentication needed" from every tool.
+            logger.warning("🔐 Keyring unavailable — using file-based token storage")
 
     # -- file-based helpers --------------------------------------------------
 

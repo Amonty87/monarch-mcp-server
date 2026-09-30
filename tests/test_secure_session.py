@@ -835,3 +835,81 @@ class TestGetAuthenticatedClient:
     def test_no_session_returns_none(self, storage_keyring):
         session, _ = storage_keyring
         assert session.get_authenticated_client() is None
+
+
+class _RecordingStore:
+    """In-memory keyring that records every call, optionally pre-seeded."""
+
+    def __init__(self, seeded=None, *, get_raises=None, set_raises=None):
+        self.store = dict(seeded or {})
+        self.calls = []
+        self._get_raises = get_raises
+        self._set_raises = set_raises
+
+    def set_password(self, service, username, value):
+        self.calls.append(("set", username))
+        if self._set_raises:
+            raise self._set_raises
+        self.store[(service, username)] = value
+
+    def get_password(self, service, username):
+        self.calls.append(("get", username))
+        if self._get_raises:
+            raise self._get_raises
+        return self.store.get((service, username))
+
+    def delete_password(self, service, username):
+        self.calls.append(("delete", username))
+        self.store.pop((service, username), None)
+
+
+class TestStartupKeyringCheck:
+    """Every server start used to write, then delete, a probe item.
+
+    That ran even in read only mode and even with a session already stored,
+    and a probe failure (a locked keychain, another account's copied
+    keychain) silently moved the process to file storage, where tools then
+    reported "Authentication needed" with the real cause logged at INFO.
+    """
+
+    STORED = json.dumps({"token": "t", "auth_mode": "token"})
+
+    def test_stored_session_means_no_probe_write(self, install_fake_keyring):
+        fake = install_fake_keyring(
+            _RecordingStore(
+                {(ss_module.KEYRING_SERVICE, ss_module.KEYRING_USERNAME): self.STORED}
+            )
+        )
+
+        session = ss_module.SecureMonarchSession()
+
+        assert session._use_keyring is True
+        assert [c for c in fake.calls if c[0] != "get"] == []
+
+    def test_no_stored_session_still_probes(self, install_fake_keyring):
+        fake = install_fake_keyring(_RecordingStore())
+
+        session = ss_module.SecureMonarchSession()
+
+        assert session._use_keyring is True
+        assert ("set", ss_module._PROBE_USERNAME) in fake.calls
+        assert ("delete", ss_module._PROBE_USERNAME) in fake.calls
+
+    def test_unreadable_keyring_falls_back_to_probe(self, install_fake_keyring):
+        install_fake_keyring(
+            _RecordingStore(
+                get_raises=RuntimeError("locked"),
+                set_raises=RuntimeError("locked"),
+            )
+        )
+
+        assert ss_module.SecureMonarchSession()._use_keyring is False
+
+    def test_file_fallback_is_logged_as_a_warning(self, install_fake_keyring, caplog):
+        install_fake_keyring(_RecordingStore(set_raises=RuntimeError("no backend")))
+
+        with caplog.at_level("INFO", logger=ss_module.logger.name):
+            ss_module.SecureMonarchSession()
+
+        fallback = [r for r in caplog.records if "file-based token storage" in r.getMessage()]
+        assert fallback and all(r.levelname == "WARNING" for r in fallback)
