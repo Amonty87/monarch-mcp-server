@@ -71,10 +71,7 @@ async def get_goals() -> str:
     Use this to find a goal id for `link_goal_id` on a transaction rule, or to
     report on goal progress.
 
-    `name` is user-editable while `default_name` is the template the goal was
-    created from -- a goal renamed "End Game" still reports default_name
-    "Retirement" and objective "retirement", which is the reliable thing to
-    match on programmatically.
+    `name` is user-editable, so match goals programmatically on `id`.
 
     Every goal is returned. `archived_at` is passed through raw and should not
     be read as the app's archive state -- see the comment above the query.

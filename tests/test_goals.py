@@ -286,3 +286,25 @@ class TestGoalContributions:
 
         assert data["success"] is False
         assert "Duplicate" in data["errors"]["message"]
+
+
+class TestGetGoalsDocstring:
+    """The docstring is the tool description a model reads, so every output
+    field it names has to exist. It promised default_name and objective after
+    the switch to savingsGoals dropped both (objective is confirmed absent on
+    SavingsGoal), so a model matching goals on them found nothing."""
+
+    # Backticked names in the docstring that are not get_goals output fields.
+    NOT_OUTPUT_FIELDS = {"link_goal_id"}
+
+    @patch('monarch_mcp_server.tools.goals.get_monarch_client')
+    async def test_documented_fields_are_returned(self, mock_get_client):
+        import re
+
+        mock_get_client.return_value = _client([_goal()])
+        returned = set(json.loads(await get_goals())["goals"][0])
+
+        documented = set(re.findall(r"`([a-z][a-z0-9_]*)`", get_goals.__doc__))
+        missing = documented - self.NOT_OUTPUT_FIELDS - returned
+
+        assert not missing, f"docstring names fields get_goals never returns: {missing}"
